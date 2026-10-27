@@ -1,0 +1,5 @@
+httpx
+trafilatura
+beautifulsoup4
+markdown
+weasyprint
