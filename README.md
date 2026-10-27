@@ -1,4 +1,4 @@
-# Busca Trabalho — Job Matcher & Resume Tailor
+# Job Matcher & Resume Tailor
 
 Repositório de automação e inteligência para busca, triagem técnica e preparação personalizada de candidaturas a vagas de tecnologia.
 
