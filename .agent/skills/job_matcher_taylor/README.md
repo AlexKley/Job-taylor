@@ -13,6 +13,7 @@ job-matcher-tailor/
 ├── requirements.txt          # Dependências Python (httpx, trafilatura, bs4, markdown, weasyprint)
 ├── data/
 │   ├── base_resume.md        # Currículo completo e estruturado do candidato (fonte única da verdade)
+│   ├── base_resume_template.md # Template reutilizável com placeholders e orientações
 │   └── cover_template.md     # Template padrão parametrizado para carta de apresentação
 └── scripts/
     ├── fetch_job.py          # Extrai e limpa a descrição textual de vagas via URL ou HTML local

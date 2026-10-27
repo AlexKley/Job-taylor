@@ -5,6 +5,19 @@
 
 ---
 
+## 0. Parâmetros de Elegibilidade & Trabalho Internacional
+- **Nacionalidade:** {{Nacionalidade}}
+- **Localização / Fuso:** {{CIDADE}}, {{ESTADO}}, {{PAÍS}} ({{FUSO_HORARIO}})
+- **Sobreposição de Horário:** {{Disponibilidade para overlap de X horas com fusos dos EUA (EST/PST) e Europa (WET/CET)}}
+- **Modalidades de Trabalho Aceitas:** 
+  - {{Remoto Internacional B2B / Independent Contractor (via Deel, Remote, Gusto, etc.)}}
+  - {{Remoto Nacional PJ / CLT}}
+  - {{Presencial Internacional apenas com suporte completo a visto (Relocation / Visa Sponsorship)}}
+- **Idiomas:**
+  - **{{Português}}:** {{Nativo / Fluente}}
+  - **{{Inglês}}:** {{Avançado / Fluente para comunicação técnica assíncrona, documentação e reuniões síncronas}}
+  - **{{Outro Idioma}}:** {{Nível de proficiência}}
+
 ## 1. Resumo Profissional
 <!-- DICA: Escreva de 1 a 2 parágrafos densos e objetivos. 
      Fórmula recomendada:

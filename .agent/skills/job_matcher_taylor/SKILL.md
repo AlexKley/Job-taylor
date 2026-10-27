@@ -1,19 +1,19 @@
 ---
 name: job-matcher-tailor
-description: Busca e analisa vagas de emprego via URL ou texto, calcula a taxa de adequação (match score) contra o currículo mestre e, se o fit for superior a 60%, adapta o currículo destacando experiências relevantes e redige uma carta de apresentação personalizada.
+description: Analisa vagas de emprego nacionais e internacionais via URL ou texto, aplica hard gates de visto, fuso horário e idioma, calcula o match score técnico contra o currículo mestre e, se o fit for >= 60%, adapta o currículo e redige carta de apresentação no idioma de origem da vaga (Português ou Inglês), exportando os materiais em Markdown e PDF.
 ---
 
 # Job Matcher & Resume Tailor
 
-## 1. Visão Geral e Arquitetura de Arquivos
+## 1. Estrutura do Workspace e Fontes de Dados
+Esta skill automatiza a triagem técnica de vagas (nacionais e remotas internacionais), a checagem regulatória/geográfica, a auditoria de aderência e a compilação bilíngue de currículos e cartas direcionadas.
 
-Esta skill automatiza a triagem técnica de oportunidades, o cálculo objetivo de compatibilidade profissional e a geração de materiais de candidatura direcionados.
-
-A skill opera utilizando a seguinte estrutura de arquivos locais:
-
-- `data/base_resume.md`: Fonte única da verdade sobre o histórico do candidato.
-- `data/cover_template.md`: Template padrão com estrutura e tom da carta de apresentação.
-- `scripts/fetch_job.py`: Script de extração de conteúdo textual de páginas web.
+Hierarquia de arquivos esperada:
+- `data/base_resume.md`: Fonte única de fatos, métricas, competências e parâmetros de elegibilidade do candidato.
+- `data/cover_template.md`: Template estruturado para cartas em português.
+- `data/cover_template_en.md`: Template estruturado para cartas em inglês (*Cover Letter*).
+- `scripts/fetch_job.py`: Extrator de conteúdo textual de páginas web de vagas.
+- `scripts/export_pdf.py`: Compilador de Markdown para PDF via WeasyPrint.
 - `output/<empresa>-<cargo>/`: Diretório onde os materiais gerados serão persistidos.
 
 ---
@@ -40,115 +40,153 @@ pip install -r requirements.txt
 
 ---
 
-## 3. Rubrica de Avaliação e Pontuação (Match Score)
+## 3. Hard Gates de Elegibilidade Internacional (Etapa Eliminatória)
 
-Calcule a pontuação final (0 a 100%) confrontando os requisitos extraídos da vaga contra o arquivo `data/base_resume.md`, utilizando a matriz de pesos abaixo:
+Antes de avaliar stacks ou calcular pontuações técnicas, verifique se a oportunidade possui bloqueios regulatórios, geográficos ou contratuais intransponíveis com base na seção de parâmetros de data/base_resume.md:
 
-| Pilar de Avaliação | Peso | Critério de Pontuação |
-|---|---:|---|
-| Requisitos Obrigatórios / Hard Skills | 40% | Proporção de linguagens, frameworks, bancos e ferramentas indispensáveis dominados pelo candidato. |
-| Tempo e Nível de Experiência | 25% | Compatibilidade de senioridade (Júnior, Pleno, Sênior, Especialista, Lead) e anos de atuação prática comprovada. |
-| Requisitos Desejáveis / Diferenciais | 20% | Tecnologias secundárias, certificações, arquiteturas específicas ou conhecimentos complementares. |
-| Alinhamento do Papel e Escopo | 15% | Correspondência entre as responsabilidades diárias da vaga e as entregas descritas no histórico do candidato. |
+1. **Localização e Trabalho Remoto:**
+    Elegível: Remote - Worldwide, Remote - LATAM, Anywhere, ou presencial com Relocation / Visa Sponsorship.
+    Bloqueio: US Only, EU/UK Only, residência obrigatória em país específico sem suporte a visto.
 
-**Fórmula de Cálculo:**
+2. **Autorização de Trabalho e Visto:**
+    Bloqueio: Menções mandatórias a "US Citizen / Green Card only", "Must be authorized to work in [País] without employer sponsorship", "No C2C", "W2 only".
+    Elegível para atuação internacional: Empresas que contratam via modelo B2B / Independent Contractor ou plataformas de Employer of Record (Deel, Remote, Gusto, Oyster, etc.).
 
-$$
-\text{Score Total} = (S_{\text{obrig}} \times 0.40) + (S_{\text{exp}} \times 0.25) + (S_{\text{desej}} \times 0.20) + (S_{\text{escopo}} \times 0.15)
-$$
+3. **Compatibilidade de Fuso Horário:**
+    O fuso base do candidato é UTC-3 (BRT).
+    Vagas com exigência de sobreposição (overlap) de até 4 a 6 horas com horários comerciais dos EUA (EST/PST) ou Europa (WET/CET) são plenamente elegíveis.
+
+4. **Idioma de Trabalho:**
+    Exigência de fluência em inglês para escrita técnica, documentação e reuniões síncronas/assíncronas é compatível com o perfil.
+
+**Regra de Aborto Imediato:** Se a vaga violar qualquer um dos itens acima (ex: vaga nos EUA exclusiva para residentes locais sem visto), encerre a execução imediatamente com Match Score: 0%, explicitando ao usuário o motivo regulatório ou territorial do impedimento, sem gerar arquivos de candidatura.
 
 ---
 
-## 4. Fluxo de Execução Passo a Passo
+## 4. Rubricas de Avaliação de Compatibilidade (Match Score)
+Caso a oportunidade seja aprovada nos Hard Gates, utilize a rubrica correspondente ao tipo de vaga:
 
-### Passo 1: Extração dos Dados da Vaga
+### A. Vagas Nacionais (Brasil / CLT ou PJ)
 
-Quando o usuário fornecer uma URL, execute:
+| Pilar de Avaliação | Peso | Critério de Pontuação |
+|---|---|---|
+| Requisitos Obrigatórios / Hard Skills | 40% | Domínio de linguagens, frameworks, bancos de dados e ferramentas essenciais. |
+| Tempo e Nível de Experiência | 25% | Compatibilidade de senioridade e tempo de atuação comprovada no mercado. |
+| Requisitos Desejáveis / Diferenciais | 20% | Tecnologias secundárias, certificações e arquiteturas listadas como bônus. |
+| Alinhamento do Papel e Escopo | 15% | Sinergia entre as responsabilidades diárias e as realizações comprovadas. |
+
+### B. Vagas Internacionais (Remoto Global / B2B / Contractor)
+
+| Pilar de Avaliação | Peso | Critério de Pontuação |
+| ---|---|--- |
+| Hard Skills & Arquitetura | 35% | Tecnologias centrais, design de sistemas distribuídos e qualidade de código. |
+| Senioridade, Autonomia & Ownership | 25% | Capacidade de entrega autônoma, iniciativa e histórico de resolução de problemas complexos. |
+| Comunicação, Idioma e Fuso Horário | 15% | Alinhamento com horário UTC-3, inglês técnico e maturidade em comunicação assíncrona. |
+| Requisitos Desejáveis / Diferenciais | 15% | Diferenciais práticos (open source, linguagens de alta performance, automações). |
+| Compatibilidade de Contratação | 10% | Aderência ao formato de contratação internacional (Contractor / B2B). |
+
+Calcule a pontuação final (0 a 100%) confrontando os requisitos extraídos da vaga contra o arquivo `data/base_resume.md`, utilizando a matriz de pesos abaixo:
+
+| Pilar de Avaliação | Peso | Critério de Avaliação Internacional |
+| ---|---|--- |
+| Hard Skills & Arquitetura | 35% | Tecnologias, frameworks e padrões exigidos pela vaga internacional. |
+| Senioridade e Autonomia | 25% | Histórico de entregas autônomas, resolução de problemas complexos e liderança. |
+| Comunicação, Idioma e Fuso | 15% | Alinhamento com fuso (UTC-3), fluência em inglês técnico e maturidade para trabalho assíncrono. |
+| Requisitos Desejáveis / Bônus | 15% | Diferenciais técnicos (ex: Rust, automações avançadas, contribuições open-source). |
+| Fit de Modelo de Contratação | 10% | Compatibilidade com o formato de contratação (ex: B2B/Contractor vs contratação direta). |
+
+---
+
+## 5. Diretriz de Idioma dos Entregáveis
+
+O idioma do anúncio e a nacionalidade da empresa determinam o idioma dos arquivos finais:
+- **Anúncio em Inglês ou Vaga Internacional:**
+    - Currículo: output/<empresa>-<cargo>/resume_tailored.md (Totalmente em Inglês).
+    - Carta: output/<empresa>-<cargo>/cover_letter.md (Totalmente em Inglês, baseado em `data/cover_template_en.md`).
+    - Terminologia: Use padrões internacionais (Software Engineer, Contractor, Distributed Systems, High Availability).
+- **Anúncio em Português ou Vaga Nacional:**
+    - Currículo: output/<empresa>-<cargo>/curriculo_adaptado.md (Em Português).
+    - Carta: output/<empresa>-<cargo>/carta_apresentacao.md (Em Português, baseado em `data/cover_template.md`).
+
+---
+
+## 6. Fluxo Operacional Passo a Passo
+
+### Etapa 1: Captura dos Requisitos
+
+1. Para URLs, execute o coletor:
 
 ```bash
 python scripts/fetch_job.py --url "<URL_DA_VAGA>" --output "output/temp_job.md"
 ```
 
-Caso o usuário forneça o texto diretamente no prompt, utilize o texto bruto fornecido.
+2. Para textos colados diretamente, processe o texto fornecido.
 
-Extraia e catalogue internamente:
+3. Identifique país da vaga, modalidade (remoto global vs local), restrições de visto e idioma exigido.
 
-- Empresa contratante e título do cargo.
-- Lista de requisitos obrigatórios versus desejáveis.
-- Principais desafios técnicos e dores operacionais mencionadas.
+### Etapa 2: Auditoria de Hard Gates
+- Valide os 4 filtros eliminatórios internacionais (Seção 3).
+- Se houver impedimento legal/geográfico, emita o relatório de bloqueio e aborte.
 
-### Passo 2: Cálculo de Compatibilidade e Relatório de Match
+### Etapa 3: Cálculo do Match Score
+- Confronte os requisitos da vaga com data/base_resume.md.
+- Apresente ao usuário uma tabela estruturada:
 
-1. Leia `data/base_resume.md`.
-2. Confronte cada requisito da vaga com as evidências do currículo.
-3. Apresente ao usuário uma tabela comparativa no formato:
-
-| Categoria | Requisito da Vaga | Evidência no Currículo Base | Status |
+| Categoria | Requisito da Vaga | Evidência em base_resume.md | Status |
 |---|---|---|---|
-| Hard Skill | Ex: Fastify / Node.js | Microserviços em produção na Empresa X | ✅ Atende |
-| Experiência | Ex: Gestão de Incidentes Tier-3 | Incident Commander no histórico | ✅ Atende |
-| Diferencial | Ex: Rust | Projeto open-source documentado | ✅ Atende |
-| Hard Skill | Ex: Kubernetes | Não localizado no currículo mestre | ❌ Lacuna |
+| Hard Skill | Ex: TypeScript / Node.js | Microsserviços de alta escala documentados | ✅ Atende |
+| Experiência | Ex: Autonomous Delivery | Histórico de entregas ponta a ponta | ✅ Atende |
+| Fuso / Idioma | Ex: 4h overlap EST / English | UTC-3 (overlap total) / Inglês fluente | ✅ Atende |
+| Hard Skill | Ex: Kubernetes Cluster Admin | Não localizado no currículo mestre | ❌ Lacuna |
 
-4. Apresente o Score Final Calculado.
+- Calcule e exiba a pontuação final percentual (Score Final).
 
-### Passo 3: Decisão por Threshold (Limite de 60%)
+### Etapa 4: Decisão por Threshold (Limite: 60%)
+- Score < 60%: Encerre o fluxo sem criar pastas ou arquivos. Destaque os gaps técnicos a serem desenvolvidos.
+- Score >= 60%: Notifique a aprovação e prossiga para a geração dos documentos.
 
-**Se Score < 60%:**
+### Etapa 5: Customização do Currículo
+1. Crie o diretório output/<empresa>-<cargo>/.
 
-- Encerre o fluxo operacional.
-- Explique os motivos da reprovação técnica, apontando as lacunas críticas que inviabilizam a candidatura competitiva.
-- Não crie arquivos na pasta de saída.
+2. Gere o arquivo Markdown (resume_tailored.md ou curriculo_adaptado.md):
+    - Inviolabilidade Factual: Mantenha fidelidade estrita às experiências e números do currículo base.
+    - Priorização Estratégica: Traga para o topo os projetos e tecnologias diretamente demandados pela vaga.
+    - Otimização de Vocabulário (ATS): Utilize a terminologia exata da vaga.
+    - Omitir informações sensíveis ou desnecessárias para a vaga, como endereço completo (pode-se usar apenas cidade/estado/país), número de documentos (RG, CPF) e estado civil.
 
-**Se Score >= 60%:**
+### Etapa 6: Geração da Carta de Apresentação
+1. Utilize o template do idioma correspondente (data/cover_template_en.md ou data/cover_template.md).
 
-- Notifique o usuário sobre a aprovação de compatibilidade e prossiga imediatamente para as etapas de customização.
+2. Preencha as variáveis mapeadas:
 
-### Passo 4: Customização do Currículo (`curriculo_adaptado.md`)
+| Variável | Fonte do Dado | Critério de Preenchimento |
+|----------|---------------|---------------------------|
+| {{CANDIDATE_NAME}} | data/base_resume.md | Nome completo do candidato. |
+| {{CANDIDATE_LOCATION}} | data/base_resume.md | Localidade e fuso horário (ex: Brazil - UTC-3). |
+| {{CANDIDATE_EMAIL}} | data/base_resume.md | E-mail de contato. |
+| {{CANDIDATE_PORTFOLIO_OR_LINKEDIN}} | data/base_resume.md | Links de perfil profissional. |
+| {{CURRENT_DATE}} | Sistema | Data atual por extenso no idioma da vaga. |
+| {{COMPANY_NAME}} | Vaga | Nome da empresa contratante. |
+| {{JOB_TITLE}} | Vaga | Título oficial do cargo. |
+| {{JOB_REFERENCE_OR_SOURCE}} | Entrada | Link ou código da vaga. |
+| {{YEARS_OF_EXPERIENCE}} | data/base_resume.md | Total de anos de experiência relevante. |
+| {{CORE_DOMAIN_AREA}} | Vaga / Currículo | Domínio técnico central compatível. |
+| {{PRIMARY_JOB_CHALLENGE_OR_PAIN_POINT}} | Vaga | Principal dor ou meta técnica descrita na vaga. |
+| {{SPECIFIC_ACCOMPLISHMENT_WITH_METRICS}} | data/base_resume.md | Realização comprovada com métricas alinhada ao desafio. |
+| {{RELEVANT_TECH_STACK_1}} | Interseção | Primeira tecnologia-chave compartilhada. |
+| {{RELEVANT_TECH_STACK_2}} | Interseção | Segunda tecnologia-chave compartilhada. |
+| {{SECONDARY_DIFFERENTIATOR_OR_METHODOLOGY}} | data/base_resume.md | Diferencial prático (ex: system observability, CI/CD, Tier-3 incident response). |
+| {{CONTRACT_PREFERENCE}} | data/base_resume.md | Ex: B2B/Contractor via Deel/Remote (se vaga internacional). |
 
-1. Crie a pasta de destino: `output/<empresa>-<cargo>/`.
-2. Gere o arquivo `output/<empresa>-<cargo>/curriculo_adaptado.md` respeitando as seguintes regras restritivas:
+3. Salve em output/<empresa>-<cargo>/cover_letter.md (ou carta_apresentacao.md).
 
-- **Inviolabilidade Factual:** É terminantemente proibido inventar empresas, cargos, métricas, datas ou ferramentas não presentes em `data/base_resume.md`.
-- **Reordenação Estratégica:** Mova para o topo dos bullet points as realizações e stacks que respondem diretamente às exigências da vaga.
-- **Alinhamento de Vocabulário (ATS):** Ajuste a terminologia técnica para espelhar os termos exatos do anúncio da vaga (ex: se o currículo diz "APIs RESTful" e a vaga exige "REST APIs", padronize).
-- **Filtragem de Ruído:** Omita ou reduza tópicos secundários que não agreguem valor para esta vaga específica.
+### Etapa 7: Compilação em PDF e Entrega
 
-### Passo 5: Geração da Carta de Apresentação (`carta_apresentacao.md`)
-
-1. Leia o arquivo `data/cover_template.md`.
-2. Substitua os placeholders pelas variáveis mapeadas conforme a tabela abaixo:
-
-| Variável | Origem dos Dados | Critério de Preenchimento |
-|---|---|---|
-| `{{CANDIDATE_NAME}}` | `data/base_resume.md` | Nome completo do candidato. |
-| `{{CANDIDATE_LOCATION}}` | `data/base_resume.md` | Cidade, estado e país de residência. |
-| `{{CANDIDATE_EMAIL}}` | `data/base_resume.md` | E-mail principal de contato. |
-| `{{CANDIDATE_PORTFOLIO_OR_LINKEDIN}}` | `data/base_resume.md` | Link para portfólio, GitHub ou LinkedIn. |
-| `{{CURRENT_DATE}}` | Sistema | Data atual por extenso (ex: 23 de Outubro de 2026). |
-| `{{COMPANY_NAME}}` | Anúncio da vaga | Nome da empresa contratante. |
-| `{{JOB_TITLE}}` | Anúncio da vaga | Título oficial da vaga anunciada. |
-| `{{JOB_REFERENCE_OR_SOURCE}}` | Anúncio ou URL | Link ou código identificador da vaga. |
-| `{{YEARS_OF_EXPERIENCE}}` | `data/base_resume.md` | Total consolidado de anos de experiência relevante. |
-| `{{CORE_DOMAIN_AREA}}` | Vaga / Currículo | Área técnica central compartilhada (ex: engenharia de software full stack). |
-| `{{PRIMARY_JOB_CHALLENGE_OR_PAIN_POINT}}` | Anúncio da vaga | O desafio crítico que a contratação visa solucionar. |
-| `{{SPECIFIC_ACCOMPLISHMENT_WITH_METRICS}}` | `data/base_resume.md` | Conquista real com métricas comprovadas que endereça a dor acima. |
-| `{{RELEVANT_TECH_STACK_1}}` | Interseção | Primeira tecnologia-chave comum à vaga e ao currículo base. |
-| `{{RELEVANT_TECH_STACK_2}}` | Interseção | Segunda tecnologia-chave comum à vaga e ao currículo base. |
-| `{{SECONDARY_DIFFERENTIATOR_OR_METHODOLOGY}}` | `data/base_resume.md` | Diferencial técnico comprovado (ex: observabilidade, CI/CD, microsserviços). |
-| `{{CANDIDATE_PHONE_OR_CONTACT}}` | `data/base_resume.md` | Telefone ou meio de contato direto. |
-| `{{CANDIDATE_GITHUB_OR_LINKEDIN}}` | `data/base_resume.md` | Perfil técnico complementar para assinatura. |
-
-3. Salve o resultado final em `output/<empresa>-<cargo>/carta_apresentacao.md`.
-
-### Passo 6: Exportação dos Documentos em PDF
-
-Após persistir `curriculo_adaptado.md` e `carta_apresentacao.md`, execute no terminal:
+1. Execute no terminal:
 ```bash
 python scripts/export_pdf.py "output/<empresa>-<cargo>/"
 ```
-
-Apresente ao usuário um resumo executivo da operação contendo:
-- Caminho completo dos arquivos gerados no disco.
-- Principais pontos de destaque inseridos no currículo adaptado.
-- Resumo da narrativa adotada na carta de apresentação.
+2. Apresente ao usuário o relatório final:
+    - Caminhos dos arquivos gerados (.md e .pdf).
+    - Resumo da pontuação nos pilares de avaliação.
+    - Justificativa do direcionamento adotado no currículo e na carta.
